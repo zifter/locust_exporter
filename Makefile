@@ -10,9 +10,13 @@ build:
 		--env=GIT_BRANCH=$(GIT_BRANCH) \
 		--env=GIT_COMMIT=$(GIT_COMMIT) \
 		--env=BUILD_TIMESTAMP=$(BUILD_TIMESTAMP) \
+		--arch amd64 \
 		-t zifter/locust_exporter:$(VERSION) \
 		-f Containerfile \
 		.
 
 run:
 	podman run zifter/locust_exporter:$(VERSION)
+
+push:
+	podman push zifter/locust_exporter:$(VERSION)

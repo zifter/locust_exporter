@@ -11,7 +11,7 @@ WORKDIR /app
 
 # Copy and build the application
 COPY . .
-RUN GOAMD64=v3 CGO_ENABLED=0 go build -trimpath -ldflags="\
+RUN GOAMD64=v3 CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="\
     -s \
     -X github.com/prometheus/common/version.Revision=${GIT_COMMIT} \
     -X github.com/prometheus/common/version.BuildUser=buildAgent \
