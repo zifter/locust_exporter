@@ -1,17 +1,18 @@
-# Copyright 2018 The Prometheus Authors
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+VERSION="local"
+GIT_BRANCH=$(shell git branch --show-current)
+GIT_COMMIT=$(shell git log -1 --pretty=format:'%h')
+BUILD_TIMESTAMP=$(shell date +"%Y/%m/%d-%T")
 
-include Makefile.common
+build:
+	@echo $(VERSION), $(GIT_BRANCH), $(GIT_COMMIT), $(BUILD_TIMESTAMP)
+	podman build \
+		--env=VERSION=$(VERSION) \
+		--env=GIT_BRANCH=$(GIT_BRANCH) \
+		--env=GIT_COMMIT=$(GIT_COMMIT) \
+		--env=BUILD_TIMESTAMP=$(BUILD_TIMESTAMP) \
+		-t zifter/locust_exporter:$(VERSION) \
+		-f Containerfile \
+		.
 
-## This is a copy!
-## https://github.com/prometheus/prometheus/blob/main/Makefile.common
+run:
+	podman run zifter/locust_exporter:$(VERSION)

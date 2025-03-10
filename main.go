@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,9 +13,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
-	"gopkg.in/alecthomas/kingpin.v2"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -337,7 +336,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	}
 	defer body.Close()
 
-	bodyAll, err := ioutil.ReadAll(body)
+	bodyAll, err := io.ReadAll(body)
 	if err != nil {
 		return 0
 	}
@@ -422,36 +421,49 @@ func countWorkersByState(stats locustStats, state string) float64 {
 }
 
 func main() {
-	var (
-		listenAddress = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9646").Envar("LOCUST_EXPORTER_WEB_LISTEN_ADDRESS").String()
-		metricsPath   = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").Envar("LOCUST_EXPORTER_WEB_TELEMETRY_PATH").String()
-		uri           = kingpin.Flag("locust.uri", "URI of Locust.").Default("http://localhost:8089").Envar("LOCUST_EXPORTER_URI").String()
-		NameSpace     = kingpin.Flag("locust.namespace", "Namespace for prometheus metrics.").Default("locust").Envar("LOCUST_METRIC_NAMESPACE").String()
-		timeout       = kingpin.Flag("locust.timeout", "Scrape timeout").Default("5s").Envar("LOCUST_EXPORTER_TIMEOUT").Duration()
-	)
+	viper.SetDefault("web.listen-address", ":9646")
+	viper.SetDefault("web.telemetry-path", "/metrics")
+	viper.SetDefault("locust.uri", "http://localhost:8089")
+	viper.SetDefault("locust.namespace", "locust")
+	viper.SetDefault("locust.timeout", "5s")
 
-	log.AddFlags(kingpin.CommandLine)
-	kingpin.Version(version.Print("locust_exporter"))
-	kingpin.HelpFlag.Short('h')
-	kingpin.Parse()
+	viper.BindEnv("web.listen-address", "LOCUST_EXPORTER_WEB_LISTEN_ADDRESS")
+	viper.BindEnv("web.telemetry-path", "LOCUST_EXPORTER_WEB_TELEMETRY_PATH")
+	viper.BindEnv("locust.uri", "LOCUST_EXPORTER_URI")
+	viper.BindEnv("locust.namespace", "LOCUST_METRIC_NAMESPACE")
+	viper.BindEnv("locust.timeout", "LOCUST_EXPORTER_TIMEOUT")
 
-	namespace = *NameSpace
+	viper.AutomaticEnv()
+
+	listenAddress := viper.GetString("web.listen-address")
+	metricsPath := viper.GetString("web.telemetry-path")
+	uri := viper.GetString("locust.uri")
+	namespace = viper.GetString("locust.namespace")
+	timeout := viper.GetDuration("locust.timeout")
+
 	log.Infoln("Starting locust_exporter", version.Info())
 	log.Infoln("Build context", version.BuildContext())
+	log.Infoln("Context: namespace =", namespace,
+		", timeout = ", timeout,
+		", url = ", uri,
+		", listenAddress = ", listenAddress,
+		", metricsPath = ", metricsPath)
 
-	exporter, err := NewExporter(*uri, *timeout)
+	exporter, err := NewExporter(uri, timeout)
 	if err != nil {
 		log.Fatal(err)
 	}
 	prometheus.MustRegister(exporter)
-	prometheus.MustRegister(version.NewCollector("locustexporter"))
 
-	http.Handle(*metricsPath, promhttp.Handler())
-	http.HandleFunc("/quitquitquit", func(http.ResponseWriter, *http.Request) { os.Exit(0) })
+	http.Handle(metricsPath, promhttp.Handler())
+	http.HandleFunc("/quitquitquit", func(w http.ResponseWriter, r *http.Request) { os.Exit(0) })
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`<html><head><title>Locust Exporter</title></head><body><h1>Locust Exporter</h1><p><a href='` + *metricsPath + `'>Metrics</a></p></body></html>`))
+		_, _ = w.Write([]byte(`<html><head><title>Locust Exporter</title></head><body>
+			<h1>Locust Exporter</h1>
+			<p><a href='` + metricsPath + `'>Metrics</a></p>
+			</body></html>`))
 	})
 
-	log.Infoln("Listening on", *listenAddress)
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	log.Infoln("Listening on", listenAddress)
+	log.Fatal(http.ListenAndServe(listenAddress, nil))
 }
