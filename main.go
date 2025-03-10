@@ -367,10 +367,12 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 		}
 	}
 
+	e.locustErrors.Reset()
 	for _, r := range locustStats.Errors {
 		e.locustErrors.WithLabelValues(r.Method, r.Name, r.Error).Set(float64(r.Occurrences))
 	}
 
+	e.locustWorkersDetail.Reset()
 	for _, worker := range locustStats.Workers {
 		e.locustWorkersDetail.WithLabelValues(worker.Id, worker.State).Set(float64(worker.UserCount))
 	}
