@@ -14,7 +14,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -426,14 +428,34 @@ func main() {
 	viper.SetDefault("locust.uri", "http://localhost:8089")
 	viper.SetDefault("locust.namespace", "locust")
 	viper.SetDefault("locust.timeout", "5s")
+	viper.SetDefault("log.level", "info")
 
 	viper.BindEnv("web.listen-address", "LOCUST_EXPORTER_WEB_LISTEN_ADDRESS")
 	viper.BindEnv("web.telemetry-path", "LOCUST_EXPORTER_WEB_TELEMETRY_PATH")
 	viper.BindEnv("locust.uri", "LOCUST_EXPORTER_URI")
 	viper.BindEnv("locust.namespace", "LOCUST_METRIC_NAMESPACE")
 	viper.BindEnv("locust.timeout", "LOCUST_EXPORTER_TIMEOUT")
+	viper.BindEnv("log.level", "LOG_LEVEL")
 
+	pflag.String("web.listen-address", viper.GetString("web.listen-address"), "Address to listen on for web interface and telemetry")
+	pflag.String("web.telemetry-path", viper.GetString("web.telemetry-path"), "Path under which to expose metrics")
+	pflag.String("locust.uri", viper.GetString("locust.uri"), "URI of Locust")
+	pflag.String("locust.namespace", viper.GetString("locust.namespace"), "Namespace for Prometheus metrics")
+	pflag.Duration("locust.timeout", viper.GetDuration("locust.timeout"), "Scrape timeout")
+	pflag.String("log.level", viper.GetString("log.level"), "Log level for the application (e.g. debug, info, warn, error)")
+	pflag.Parse()
+
+	viper.BindPFlags(pflag.CommandLine)
 	viper.AutomaticEnv()
+
+	logLevelStr := viper.GetString("log.level")
+	level, err := logrus.ParseLevel(logLevelStr)
+	if err != nil {
+		logrus.Errorf("Invalid log level '%s', defaulting to info", logLevelStr)
+		level = logrus.InfoLevel
+	}
+	logrus.SetLevel(level)
+	logrus.Infof("Log level set to %s", level.String())
 
 	listenAddress := viper.GetString("web.listen-address")
 	metricsPath := viper.GetString("web.telemetry-path")
@@ -441,17 +463,14 @@ func main() {
 	namespace = viper.GetString("locust.namespace")
 	timeout := viper.GetDuration("locust.timeout")
 
-	log.Infoln("Starting locust_exporter", version.Info())
-	log.Infoln("Build context", version.BuildContext())
-	log.Infoln("Context: namespace =", namespace,
-		", timeout = ", timeout,
-		", url = ", uri,
-		", listenAddress = ", listenAddress,
-		", metricsPath = ", metricsPath)
+	logrus.Infof("Starting locust_exporter %s", version.Info())
+	logrus.Infof("Build context: %s", version.BuildContext())
+	logrus.Infof("Context: namespace = %s, timeout = %s, uri = %s, listenAddress = %s, metricsPath = %s, logLevel: %s",
+		namespace, timeout, uri, listenAddress, metricsPath, logLevelStr)
 
 	exporter, err := NewExporter(uri, timeout)
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatalf("Error creating exporter: %v", err)
 	}
 	prometheus.MustRegister(exporter)
 
@@ -464,6 +483,6 @@ func main() {
 			</body></html>`))
 	})
 
-	log.Infoln("Listening on", listenAddress)
-	log.Fatal(http.ListenAndServe(listenAddress, nil))
+	logrus.Infof("Listening on %s", listenAddress)
+	logrus.Fatal(http.ListenAndServe(listenAddress, nil))
 }
